@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image2Code | AI image to HTML</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: white;
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .sub {
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      margin-bottom: 2rem;
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    .card {
+      background: white;
+      border-radius: 1.5rem;
+      padding: 1.5rem;
+      box-shadow: 0 20px 35px -10px rgba(0,0,0,0.2);
+    }
+    .card h2 {
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 1rem;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 1rem;
+    }
+    .dropzone:hover {
+      border-color: #667eea;
+      background: #f8fafc;
+    }
+    .preview-img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 0.75rem;
+      margin-top: 1rem;
+      display: none;
+    }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 2rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      font-size: 1rem;
+      transition: transform 0.1s;
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      margin: 1rem 0;
+      color: #667eea;
+      font-weight: bold;
+    }
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      border-top-color: #667eea;
+      animation: spin 1s ease infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    iframe {
+      width: 100%;
+      height: 500px;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      background: white;
+    }
+    .code-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .code-actions button {
+      background: #1e293b;
+      margin-top: 0;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: monospace;
+      padding: 0.75rem;
+      border-radius: 0.75rem;
+      border: 1px solid #cbd5e1;
+      font-size: 0.8rem;
+    }
+    .desc-badge {
+      background: #f1f5f9;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      font-size: 0.8rem;
+      margin-top: 1rem;
+      color: #334155;
+    }
+    @media (max-width: 800px) {
+      .main-grid { grid-template-columns: 1fr; }
+      body { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🖼️ → 💻 Image2Code</h1>
+  <div class="sub">Upload a screenshot of any UI, get HTML/CSS using AI (DeepSeek + BLIP)</div>
+
+  <div class="main-grid">
+    <!-- Left panel -->
+    <div class="card">
+      <h2>📤 1. Upload image</h2>
+      <div id="dropzone" class="dropzone">
+        📁 Drag & drop an image here<br>or click to select<br>
+        <small style="color:#64748b">PNG, JPG, WEBP (max 5MB)</small>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+      <img id="preview" class="preview-img" alt="Preview">
+      <div id="descPreview" class="desc-badge" style="display:none"></div>
+      <button id="generateBtn">✨ Generate HTML from image</button>
+      <div id="loading" class="loading"><span class="spinner"></span> AI is analyzing & coding...</div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="card">
+      <h2>🎨 2. Result (Live Preview)</h2>
+      <iframe id="previewFrame" srcdoc="<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif'>✨ Your generated page will appear here</body></html>"></iframe>
+      <div class="code-actions">
+        <button id="copyBtn">📋 Copy HTML</button>
+        <button id="downloadBtn">💾 Download .html</button>
+      </div>
+      <h2 style="margin-top:1rem">📄 Generated Code</h2>
+      <textarea id="codeArea" placeholder="HTML/CSS code will appear here..." readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const preview = document.getElementById('preview');
+  const generateBtn = document.getElementById('generateBtn');
+  const loadingDiv = document.getElementById('loading');
+  const previewFrame = document.getElementById('previewFrame');
+  const codeArea = document.getElementById('codeArea');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const descPreview = document.getElementById('descPreview');
+
+  let currentImageFile = null;
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = '#667eea'; });
+  dropzone.addEventListener('dragleave', () => dropzone.style.borderColor = '#cbd5e1');
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) handleImage(file);
+    dropzone.style.borderColor = '#cbd5e1';
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) handleImage(e.target.files[0]);
+  });
+
+  function handleImage(file) {
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image too big, max 5MB');
+      return;
+    }
+    currentImageFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+      descPreview.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  generateBtn.addEventListener('click', async () => {
+    if (!currentImageFile) {
+      alert('Please select an image first');
+      return;
+    }
+    loadingDiv.style.display = 'block';
+    generateBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('image', currentImageFile);
+
+    try {
+      const res = await fetch('/api/convert', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      // Show description if you want
+      if (data.description) {
+        descPreview.textContent = `🤖 AI recognized: ${data.description}`;
+        descPreview.style.display = 'block';
+      }
+
+      const generatedHtml = data.html;
+      codeArea.value = generatedHtml;
+      previewFrame.srcdoc = generatedHtml;
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      loadingDiv.style.display = 'none';
+      generateBtn.disabled = false;
+    }
+  });
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(codeArea.value);
+    alert('HTML copied to clipboard!');
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const blob = new Blob([codeArea.value], { type: 'text/html' });
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = 'generated.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
