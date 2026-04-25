@@ -1,0 +1,71 @@
+import { IncomingForm } from "formidable";
+import { HfInference } from "@huggingface/inference";
+import OpenAI from "openai";
+
+export const config = {
+  api: {
+    bodyParser: false, // BODY PARSER POUR FORMIDABLE
+  },
+};
+
+const hf = new HfInference(process.env.HF_TOKEN);
+const deepseek = new OpenAI({
+  baseURL: "https://api.deepseek.com",
+  apiKey: process.env.DEEPSEEK_API_KEY,
+});
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    // 1. Extraire l'image depuis la requête
+    const form = new IncomingForm();
+    const { fields, files } = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
+
+    const imageFile = files.image[0];
+    if (!imageFile) return res.status(400).json({ error: "No image uploaded" });
+
+    // 2. Convertir l'image en buffer pour HF
+    const buffer = await fs.readFile(imageFile.filepath);
+    
+    // 3. Image → description (BLIP)
+    const blipResult = await hf.imageToText({
+      model: "Salesforce/blip-image-captioning-large",
+      data: buffer,
+    });
+    const description = blipResult.generated_text;
+
+    // 4. Description → HTML (DeepSeek)
+    const completion = await deepseek.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert front-end developer. Return ONLY valid HTML/CSS code inside ```html ... ```. Make it responsive and modern.",
+        },
+        {
+          role: "user",
+          content: `Generate a complete, responsive HTML/CSS webpage based on this description: ${description}`,
+        },
+      ],
+      max_tokens: 4000,
+    });
+
+    let htmlCode = completion.choices[0].message.content;
+    const match = htmlCode.match(/```html([\s\S]*?)```/);
+    if (match) htmlCode = match[1].trim();
+
+    res.status(200).json({ success: true, html: htmlCode, description });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+}
