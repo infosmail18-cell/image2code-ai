@@ -1,0 +1,59 @@
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export async function POST(req) {
+  const { message, provider } = await req.json();
+
+  try {
+    if (provider === "openai") {
+      const res = await openai.responses.create({
+        model: "gpt-4.1-mini",
+        input: message,
+      });
+
+      return Response.json({ result: res.output_text });
+    }
+
+    if (provider === "deepseek") {
+      const r = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [{ role: "user", content: message }],
+        }),
+      });
+
+      const data = await r.json();
+      return Response.json({ result: data.choices[0].message.content });
+    }
+
+    if (provider === "hf") {
+      const r = await fetch(
+        "https://api-inference.huggingface.co/models/gpt2",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.HF_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ inputs: message }),
+        }
+      );
+
+      const data = await r.json();
+      return Response.json({ result: data });
+    }
+
+    return Response.json({ error: "Invalid provider" }, { status: 400 });
+
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
